@@ -1,14 +1,26 @@
-# `bottleservice-pf` -- bottleservice-ret plus POST FADER
+# `bottleservice-pf` -- the home rig
 
-[`bottleservice-ret`](../bottleservice-ret/README.md) plus
-[POST FADER](../../modules/post-fader/manifest.py): every bus send (SEND's
-DEL and REV, and the hosts' own) follows its track's fader, mute and solo,
-the way an aux send does on a mixer. The knobs on the panel keep their
-values; only what the DSP hears is scaled, by (LEVEL/128)^2 -- the mixer's
-own law. A muted (or unsoloed) track sends nothing and does not count as a
-sender, so the others keep their level.
+[`bottleservice`](../bottleservice/README.md) with 20-channel USB AUDIO OUT
+(tracks, MAIN, CUE), the recorder click fixes, RLEN PLEN, MODE DEFAULTS and:
 
-A scene or the crossfader on a track's LEVEL moves its sends too.
+- [RETURNS](../../modules/returns/manifest.py): the reverb's return leaves
+  T5 and gets its own level, VRB, on T8's FX2 page. With MASTER TRACK on it
+  goes into T8's input (T8's FX1 and fader process it); off, into MAIN.
+  `tools/hw/ot_project.py host <project> bottleservice-pf` puts RETURNS on
+  T8 and the servers on T1/T5. RETURNS is on the FX2 chooser (T8 only: a
+  no-op anywhere else).
+- [POST FADER](../../modules/post-fader/manifest.py): every bus send (SEND's
+  DEL and REV, and the hosts' own) follows its track's fader, mute and solo,
+  the way an aux send does on a mixer. The knobs on the panel keep their
+  values; only what the DSP hears is scaled, by (LEVEL/128)^2 -- the
+  mixer's own law. A muted (or unsoloed) track sends nothing and does not
+  count as a sender, so the others keep their level. A scene or the
+  crossfader on a track's LEVEL moves its sends too.
+- [HOST LOCK](../../modules/host-lock/README.md): the FX2 chooser changes
+  nothing on T1 and T5, so their bus servers stay.
+
+The variants it grew from (`bottleservice-rec`, `-rec-plen`, `-ret`) and
+`-pf-flag` were removed on 9 Oct 2026; they are in history.
 
 ## Where it has run
 
