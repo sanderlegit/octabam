@@ -19,7 +19,11 @@
 | Octakit's recipe owns those two words, 0x400bab08 and 0x400baaee), the
 | current part's working bytes are copied into its mirror first -- what a
 | stock edit would have left. Her bytes are untouched; her checks run whole.
-| Every register is preserved.
+| Every register is preserved, and the handler is entered with the stack
+| and return address the stock dispatch gives it (0x40031922 pushed, then a
+| jump): Octakit's machine-change wrapper refuses any other return, and a
+| `jsr` from here halted every machine change (VEC:04 at
+| gk_machine_transition_entry_validate_report_fatal, 9 Oct 2026).
 
         .set    REC_CLEAR, 0x400bab08   | page-key layer: CLEAR's press handler (Octakit's wrapper)
         .set    REC_PASTE, 0x400baaee   | ... PASTE's
@@ -28,7 +32,7 @@
         .set    PARTIDX,   0x100b14cf   | the current part (her GK_STOCK_CURRENT_PART_PRIMARY)
         .set    MIRROR,    0x100a4ece   | the SRAM mirror (her GK_STOCK_WORKING_PART_MIRROR_BASE)
         .set    PARTSZ,    0x18b2       | one part, 6322 bytes (her GK_PART_PAYLOAD_SIZE)
-        .set    RESUME,    0x40031922   | the dispatch's `addq.l #8,%sp`
+        .set    RESUME,    0x40031922   | the dispatch's `addq.l #8,%sp`, the handler's return
 
         .text
         .global osm_dispatch
@@ -40,8 +44,8 @@ osm_dispatch:
 1:      bsr.s   osm_sync
 2:      move.l  %d4,-(%sp)
         move.l  %d2,-(%sp)
-        jsr     (%a0)
-        jmp     (RESUME).l
+        pea     (RESUME).l
+        jmp     (%a0)
 
 | the current part's working bytes into its mirror, a word at a time (the
 | mirror's parts are two-byte aligned)

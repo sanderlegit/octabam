@@ -5,6 +5,13 @@ a mode is seen on hardware.
 
 Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
 
+## Every machine change (THRU -> FLEX, any -> any, any track) halts with VEC:04 on images carrying OCTAKIT MIRROR ✅ measured under the port, fix built (not yet on the unit)
+
+- **Seen:** an MKII, 9 Oct 2026: the machine chooser's YES -> `VEC:04 ADDR:45D2BC08 D0:00000001`, any track. Every image with OCTAKIT MIRROR (RIGPF4BP on) carries it; reproduced under the port on `bottleservice-pf` and on `test/octakit` (OCTAKIT + the mirror the registry appends).
+- **Cause (measured under the port):** `0x45D2BC08` is `gk_machine_transition_entry_validate_report_fatal`. Her machine-change wrapper requires the key dispatch's own return, `0x40031922`; OCTAKIT MIRROR's detour at `0x4003191c` replayed the dispatch's `jsr (a0)` from DRAM, so the handler returned to `0x40aaa09c` (`osm_dispatch`) and the check refused it. Page CLEAR worked because her clipboard wrapper does not check its return.
+- **Fix:** `osm_dispatch` pushes `0x40031922` and jumps to the handler, so it is entered exactly as stock enters it.
+- **Check:** `verify_machine_select` (OCTAKIT MIRROR's gate): FUNC + SRC, DOWN, YES on T2 and T3 reaches stock's select `0x4005a5a8` with no halt; FAILs on the old detour. The other machine-transition kinds her wrapper validates (commit, setup, temporary) are not exercised.
+
 ## Page CLEAR (a page key + CLEAR) halts with VEC:04 on every image carrying OCTAKIT ✅ measured, worked around (OCTAKIT MIRROR, on the unit)
 
 - **Seen:** an MKII, 30 Sep 2026 (RIGPF2, RIGPF3BP, BSRET10BP): hold SRC, AMP, LFO, FX1 or FX2 and press CLEAR -> `VEC:04 ADDR:45D268FC`, any track, playing or stopped. FUNC + CLEAR (CLEAR PATTERN) is fine; BASE (no Octakit) is fine.

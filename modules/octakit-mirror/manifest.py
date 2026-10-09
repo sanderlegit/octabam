@@ -38,5 +38,9 @@ MODULE = Module(
     # needs a project Octakit has staged a Kit into (kits3a/kits3b): it runs
     # a control build without this module first and SKIPs when that does not
     # halt, rather than pass on a project that cannot show the fault
-    gates=(Gate("tools/verify/verify_octakit_mirror.py", venv=True),),
+    # the detour must enter every handler with the stock return: Octakit's
+    # machine-change wrapper checks it (a `jsr` from DRAM halted every
+    # machine change, 9 Oct 2026)
+    gates=(Gate("tools/verify/verify_octakit_mirror.py", venv=True),
+           Gate("tools/verify/verify_machine_select.py", venv=True)),
 )
