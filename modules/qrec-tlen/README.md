@@ -16,7 +16,10 @@ Fixture: a copy of a project with bank 1 rewritten (every pattern and part).
 T1 records. T2 has T1's length and scale and a REC1 trig on step 1, so its
 arm sample (`0x46c7fa84[1]`) marks each of T1's loop points in the same clock
 as T1's arm (`0x46c7fa84[0]`, written at `0x40006b4a` as `[0x46104cf8]` + the
-in-frame offset). Keys are the panel's, through `ot_emu --live-script`. The
+in-frame offset). T1's recorder sources (INAB, INCD, SRC3, AB, CD) are set to
+T2's in every part: with a different source, T1's arm sat 0x50 samples before
+T2's reference arm on stock as well ("PROJECT 2025": T1 INAB 0 / SRC3 0, T2
+INAB 1 / SRC3 9). Keys are the panel's, through `ot_emu --live-script`. The
 scripts are `tools/verify/verify_qrec_tlen.py`'s.
 
 - **The gesture.** TRACK + REC AB (`0x10`, `0x2b`), in either order,

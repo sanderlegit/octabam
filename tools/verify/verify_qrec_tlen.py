@@ -108,6 +108,11 @@ def make(src, dest, *, pertrack, mlen, mscale, tlen, tscale, qrec, trig=0, rlen=
                 b = otp.PART_BASE + pi * otp.PART_STRIDE + otp.REC_SETUP_OFF + t * 12
                 for f, v in vals:
                     d[b + otp.REC_FIELDS.index(f)] = v & 0xff
+            # T1 records from T2's sources: T2's arm is the reference clock,
+            # and a different source moved T1's arm 0x50 samples on stock too
+            b = otp.PART_BASE + pi * otp.PART_STRIDE + otp.REC_SETUP_OFF
+            for f in ("INAB", "INCD", "SRC3", "AB", "CD"):
+                d[b + otp.REC_FIELDS.index(f)] = d[b + 12 + otp.REC_FIELDS.index(f)]
     otp._bank_write(dest, 1, mut, guard=False)
     for suffix in ("work", "strd"):
         path = dest / f"project.{suffix}"
