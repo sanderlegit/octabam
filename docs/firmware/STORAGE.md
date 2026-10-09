@@ -87,7 +87,9 @@ under the port on stock 1.40C;
 - The sanitiser at `0x400994b4` (`0x40099448..94b8`) writes `end =
   min(length, max(trim_end, start + 64))` into the slot's settings record
   (`0x100b14f0 + 0x448·slot` FLEX, `0x100d5b30 + …` STATIC; trim at `a4 +
-  300 + 20·(slice+1)`). The voice start (`0x4000f6e2..f78a`, stores at
+  300 + 12·(slice+1)`, slice −1 = the trim: `(n<<4) − (n<<2)` at
+  `0x4000f696..f6a2`; this read `20·(slice+1)` until 9 Oct 2026, which no
+  12-byte {start, end, loop} slice record fits). The voice start (`0x4000f6e2..f78a`, stores at
   `0x4000f790/f794`) copies that region into the voice struct
   (`0x800049d8 + 0xa8·track`, +40) and pads a trim under 64 frames to 64
   (`0x4000f758..f76c`). The slot STATE records (`0x46c922c4 + 44·slot`)

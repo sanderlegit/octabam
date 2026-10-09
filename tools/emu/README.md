@@ -127,6 +127,12 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
     once and forks one child per scenario from the identical loaded
     machine. The DSP cores' shared memory is copied private in each child
     (`unshareRanges`, `main.cpp`).
+  - A child parses `--watch-mem` and `--lcd` but does not act on them:
+    measured 9 Oct 2026 (`verify_slicetools`), a child's watch reported
+    `0 write(s)` over a byte its own script wrote, and no LCD file
+    appeared, while the same script on its own boot logged the write and
+    the plane. A null result from a watch in a scenario is no result; run
+    a watched case on its own boot.
 - **MIDI IN.**
   - `--midi FILE` takes one event per line: `<frames after the transport
     start> <hex bytes>`, or `pre <hex bytes>` (before the transport start,

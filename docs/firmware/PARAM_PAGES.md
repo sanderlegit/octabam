@@ -401,8 +401,12 @@ the per-type variation). `DSP.md` section 5 for the delay.
 
 64 × 32-byte step records from `TRAC + 0x59` (byte k = p-lock of scene
 parameter k: PLAYBACK 0..5, LFO 6..11, AMP 12..17, FX1 18..23, FX2
-24..29; byte 31 sample lock; `0xff` none); full address `bank + p*0x8ed8 +
-t*0x91a + 0x78 + (s−1)*0x20`. Trig word `TRAC + 0x89a + (s−1)*2` (bits
+24..29; byte 31 sample lock; `0xff` none); byte k of step s at `bank +
+p*0x8ed8 + t*0x91a + 0x59 + (s−1)*0x20 + k`, so STRT (k = 1) is `TRAC +
+0x5a + (s−1)*0x20` (stock CREATE LINEAR LOCKS writes it there,
+`0x4007361e`; this section gave `+ 0x78 + (s−1)*0x20` as the record's
+address until 9 Oct 2026: that is byte 31, the sample lock). The same
+offsets from `0x1001614e` are the bank's SRAM twin. Trig word `TRAC + 0x89a + (s−1)*2` (bits
 15-13 trig count − 1, 12-7 micro-timing ±23, 6-0 condition; labels
 `0x400b2588`); in the bank FILE one byte earlier (`+0x899`). Sample-lock
 store `0x40040ee0(slot)` (steps from `0x460d174a`, page base `0x460d174c`;
@@ -424,7 +428,16 @@ page-2 `+0x64` (`FUN_400526e4`); part offsets from `part = bank + 0x8ed80
 machine*6` PLAYBACK p1, `+0x11a + track*24 + page*6` LFO/AMP/FX1/FX2 p1,
 `+0x2f2 + track*30` LFO PMTR ×3 then WAVE ×3, `+0x662 + (scene*8 +
 track)*0x20` scene locks; LFO destinations 0..29 use the scene-byte
-numbering. Where a Part lives (working, saved, SRAM) is `STORAGE.md` section 3.
+numbering. ✅ `+0x1da + track*30 + machine*6` PLAYBACK SETUP (page 2), so
+SLIC is `+0x1da + track*30 + machine*6 + 1` (`+0x1db` STATIC, `+0x1e1`
+FLEX; CREATE LINEAR LOCKS sets it, `0x4007368a` / `0x40073754`);
+`+0x2ca + track*5 + machine` the track's sample slot per machine (STATIC,
+FLEX, THRU, NEIGHBOR, PICKUP; THRU's is SLICE TOOLS' AUTO LINEAR flag,
+`modules/slice-tools/README.md`). The current Part's SRAM twin is
+`0x100a4ece + part*0x18b2` (the same offsets; `0x100a50ae + 1 + track*30`
+= FLEX SLIC at `0x40073694`). Measured under the port with
+`verify_slicetools` (9 Oct 2026): the panel's CREATE LINEAR LOCKS-based
+writes land at exactly these bytes, bank and SRAM alike. Where a Part lives (working, saved, SRAM) is `STORAGE.md` section 3.
 Bryan T's `octa-bt-pt` registry (4 Sep 2026; 61 parameters across 14
 effects) agrees with section 3's counts on 12 of 14 (FILTER 12, SPAT 10, DELAY
 12, EQ 8, DJEQ 5, PHSR 7, FLNG 6, CHOR 8, COMB 5, SPRG 6, COMP 7, LOFI 6);
