@@ -12,8 +12,12 @@ YES's handler word (`0x400bc374`, stock value `0x40052474`: the FX2 machine
 select, which Octakit's recipe wraps) is repointed to `hostlock.s`. On T1
 or T5 (the current-track byte `0x100b14cc` = 0 or 4) it jumps to the NO
 handler (`0x4003d440`: the chooser closes, nothing changed); on any other
-track to the select, as before. Octakit's runtime and the sites her recipe
-claims are untouched.
+track to the select, as before. On T8, in a remix that carries RETURNS,
+YES selects only when the highlighted row (`0x460d5ca8`, through the row
+table `0x400d6090`, the lookup Octakit's wrapper makes) is RETURNS': the
+master keeps its returns, and a T8 that lost them (an older part, a copied
+project) can be given them back on the unit. Octakit's runtime and the
+sites her recipe claims are untouched.
 
 ## Measured
 
@@ -21,6 +25,11 @@ claims are untouched.
   `bottleservice-pf` with a stress project): FUNC + FX2, DOWN, YES on T1
   and T5 runs NO and never the select; on T2 and T8 it runs the select
   (through Octakit's wrapper) and never NO; no halt.
+
+- Under the port (9 Oct 2026, the same gate with a FX2-row dump and a
+  baseline run): T8 UP (SEND's row) + YES runs NO and T8 keeps its id;
+  T8 DOWN (RETURNS' row) + YES selects and T8 reads 0x1b; T1/T5 keep
+  0x06/0x07. The pre-T8 module FAILs the T8 UP case.
 
 ## On the unit
 
