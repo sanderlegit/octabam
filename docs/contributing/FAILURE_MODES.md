@@ -5,6 +5,14 @@ a mode is seen on hardware.
 
 Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
 
+## An FX2 page pasted from T1 (or T5) makes the destination's sends do nothing (rig) ✅ measured under the port, fix built (not yet on the unit)
+
+- **Seen:** an MKII, RIGPF11B (`bottleservice-pf`), 9 Oct 2026. T1's FX2 page was copied (FX2 + COPY) and pasted (FX2 + PASTE) on another track. The knobs pasted and the page read like SEND's, but the sends did nothing. Pasting T3's FX2 page (a real SEND) fixed it.
+- **Cause (measured under the port):** a page paste copies the effect id with the knobs. Stock's restore (`0x40027e4c`, page 4) writes clipboard + 18 to the part's FX2 id, the SRAM mirror and the live id `0x80000ecc[t]`. T2 got `0x06`, the hidden BusDelay, which is a dry pass off its host slot (HOSTGUARD). A track paste (GRID REC, FUNC + PASTE) does the same. HOST LOCK guards only the chooser.
+- **Fix:** `modules/role-paste` (in `bottleservice-pf`). Both pastes keep the destination's role id (T1 BusDelay, T5 BusVerb, T8 RETURNS, else SEND), and only DEL/REV cross. The paste stays stock's: the stub rewrites the clipboard before it runs and puts the clipboard back after.
+- **Check:** `verify_role_paste`: a control without the module gives T2 `0x06`, and every direction is checked in part, mirror, live id and lane.
+- **On a card made before the fix:** a track that already holds a wrong id is repaired by pasting a SEND's FX2 page onto it, as on the unit, or by `tools/hw/ot_project.py host`.
+
 ## Every machine change (THRU -> FLEX, any -> any, any track) halts with VEC:04 on images carrying OCTAKIT MIRROR ✅ measured under the port, fix built (not yet on the unit)
 
 - **Seen:** an MKII, 9 Oct 2026: the machine chooser's YES -> `VEC:04 ADDR:45D2BC08 D0:00000001`, any track. Every image with OCTAKIT MIRROR (RIGPF4BP on) carries it; reproduced under the port on `bottleservice-pf` and on `test/octakit` (OCTAKIT + the mirror the registry appends).
