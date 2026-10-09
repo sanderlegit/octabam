@@ -17,9 +17,9 @@ What the rule does not cover (decided 16 Sep 2026): the few displaced
 instructions at a cave's hook site. A `CfPatch.hook_stock` is the six to
 ten bytes the installer overwrites with its `jsr` and the cave replays; the
 build refuses an image that does not hold them, which is the check that
-keeps a cave off the wrong OS. Those opcodes (ten sites, 70 bytes in all: `recorder-loop-fix` eight
+keeps a cave off the wrong OS. Those opcodes (eleven sites, 78 bytes in all: `recorder-loop-fix` eight
 sites and 54 bytes, `tempo-sync` one site and 10 bytes, `rlen-plen` one
-site and 6 bytes; the Kyoti upstream's `TS_HOOK_STOCK` in
+site and 6 bytes, `qrec-tlen` one site and 8 bytes; the Kyoti upstream's `TS_HOOK_STOCK` in
 `batch-bugfixes` is a further 18) are an
 instruction, not a firmware, and every ColdFire module carries its own
 the same way. Keep a hook to whole instructions and the minimum span; data

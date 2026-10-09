@@ -11,6 +11,10 @@ frame-phase model and its simulation are in git history
 Status key as `CHIP.md`: ✅ read from our image or measured · 🟡 adopted on
 his evidence · ❌ retracted.
 
+Addresses are the MAIN OS's, which loads at `0x40000400`, not
+`0x40000000` (`m68k-elf-objdump -D -b binary -m m68k:cfv4e
+--adjust-vma=0x40000400 out/raw/section_3_MAIN_OS.bin`).
+
 ## 1. Control path ✅
 
 | claim | read here |
@@ -19,8 +23,8 @@ his evidence · ❌ retracted.
 | defaults `E+0x96` | `1 1 64 1 0 1 0 0 0 255 255 0` |
 | min `E+0xa2` | `−1` for QREC/QPL only |
 | count `E+0xd2` | `5 5 65 3 11 2 113 113 128 18 18 128` |
-| formatter `E+0x11a` | `0x4003b18c` |
-| QREC/QPL ladder `0x400d80e0` (`0xFFFFFFFF` sentinel before) | `1 2 3 4 6 8 12 16 24 32 48 64 96 128 192 256` |
+| formatter words `E+0x102 + 4·slot` | FIN/FOUT (`E+0x11a`, `E+0x11e`) `0x4003b18c`; QREC `0x4003b150` (`E+0x126` = `0x400d3d9a`, its only reference: OFF below 0, the strings `0x400a7920[raw]` for 0..16, nothing above); QPL `0x4003b114` (`E+0x12a`); the rest 0 |
+| QREC/QPL ladder: the code indexes `0x400d80dc[raw]` (`0x400a4310`, `0x400a4154`), whose entry 0 is `−1` (PLEN's slot) | `1 2 3 4 6 8 12 16 24 32 48 64 96 128 192 256` for raw 1..16 |
 | one-hot class table `0x400d8120` | `1 2 4 1024 8 2048 16 4096 32 8192 64 16384 128 32768 256 65536 512` |
 | tempo chain `0x4000ca94..cabc`, publisher call `0x4000cac2` | `1814→181c`, `1818→1824`, `d1 = 0x80000000 ÷ [181c] → 1820`; `pea 0x60 / pea 0x80000c94 / dest 0x80000cf4 + page×96` |
 | RLEN conversion `0x4006e3b2` | `mvsb 0x80000cf4(2,track)`, gate `≤ 63`, `(raw+1) × 63504000`, `remul` by `[0x80001814] << 2`, floor 64 |
@@ -38,6 +42,10 @@ so recorder lengths are 44.1 kHz samples, RLEN raw+1 is sequencer steps
 (`0x4000cf60` `moveq #32 / movel %d0,%macsr`; `0x4000d3ae` `movel
 #32,%macsr`): fractional, signed, no saturation, truncating. Why the pickup
 arm reads the FOUT slot is open.
+
+❌ Retracted (9 Oct 2026): this table had the formatter at `E+0x11a` as the
+page's (it is FIN/FOUT's slot) and the ladder at `0x400d80e0` (the code's
+base is `0x400d80dc`, entry 0 the −1 sentinel).
 
 ❌ Retracted (2 Sep 2026): `0x80000003` / `0x100b14cf` are the current PART, not pattern
 (`0x40062120..48`: `mvzb 0x80000004` × `0x8ed8` + bank blob, byte
@@ -57,6 +65,30 @@ BANK, types `0x14`, `6`); recorder buffers are object ids 128–135 in the
 136-entry arena `0x100b14f0 + id×1096` (control records `0x46c922c4 +
 id×44`), armed by opcode `0x25`, length floored at 64, LOOP at state
 `+292`; the TRIG=ONE / SRC3=MAIN default fixup is not in the image.
+
+### 1b. QREC: how a manual take is quantised (port, 9 Oct 2026) ✅
+
+Measured on stock 1.40C under the port, with the panel's own keys;
+`modules/qrec-tlen/README.md` has the runs and `tools/verify/verify_qrec_tlen.py`
+the fixtures.
+
+- TRACK + REC AB, in either order, reaches `FUN_400836d8`, which calls
+  `FUN_40005178(t, 0x9010, 1)` by register (`jsr (a4)` at `0x4008385c`). A
+  sequencer recorder trig never enters `FUN_40005178`: QREC quantises manual
+  takes only.
+- The class is staged in `0x800018be[t]`. It meets a mask that the master
+  step (`0x400a421a..`) builds in the same sequencer tick as the track's wrap
+  (`0x400a536c`), stamped one master step ahead. The comparator `0x4000b2ce`
+  adds that timestamp's in-frame offset (`0x80001811/12`). PLEN and QREC 64
+  armed on the sample of a REC1 trig on step 1, subframe included.
+- A track step processed at tick P sounds one of its own steps later. A
+  master-step mask fires one master step later. Master-length restarts are
+  scheduled per track (`0x400a4bbc..`) to sound on the master's beat.
+- Stock PLEN in PER TRACK mode waits for the master loop (master 256 / track
+  64: 256 steps; master INF: never).
+- QREC raw 17 survives the bank load. On stock it reads the word past the
+  class table, a message buffer (`0x11pp0015`), and fires on the next 2-step
+  boundary.
 
 ## 2. Pool, write path, loop point ✅ bytes, 🟡 reading
 
@@ -159,7 +191,9 @@ pool cursor, `0x461053a8/e8`):
 ### 2b. RLEN PLEN
 
 The fixed-length path, the sequencer's pattern length and scale, and the
-module's measurements: `modules/rlen-plen/README.md`.
+module's measurements: `modules/rlen-plen/README.md`. QREC TLEN
+(`modules/qrec-tlen/README.md`) starts the take on the track's own loop
+point; with RLEN PLEN and TRIG ONE one press records exactly one loop.
 
 ## 3. Recording length arithmetic (checked against Bryan T's primer, 6 Sep 2026)
 
