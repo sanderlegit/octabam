@@ -187,8 +187,10 @@ def build_fixture(src, dest):
         data[t + 0x10 + 5] |= 1 << ((20 - 1) % 8)            # trigless on 20
         data[t + 0x5a + 32 * 6] = 0x20                       # STRT on empty step 7
         data[t + 0x5a + 32 * 19] = 0x08                      # STRT on step 20
-        tail = otp.PTRN0 + otp.PTRN_FSTRIDE - 11             # A01: LEN 12, NORMAL
-        data[tail] = data[tail + 2] = PLEN
+        data[t + 0x50] = PLEN                                # T1's own LEN (PER TRACK)
+        tail = otp.PTRN0 + otp.PTRN_FSTRIDE - 11             # A01's tail = RAM pattern + 0x8e51:
+        data[tail] = data[tail + 2] = PLEN                   # LEN 12 (+0x8e53)
+        data[tail + 4] = 0                                   # NORMAL, not PER TRACK (+0x8e55)
     otp._bank_write(dest, 1, mut, guard=False)
 
 
