@@ -8,7 +8,7 @@ sample played one slice per step.
 |---|---|
 | CREATE SLICE GRID > **TLEN SLICES** (row 12, after 2 SLICES) | N equal slices, N = the active track's length, clamped to 1..64. In PER TRACK mode that is the track's own length, otherwise the pattern's. It goes through the stock setter `0x40073984(N)`, so the stock refusals, the ZERO-CROSS ALIGN? question and the stock record writer all run as they do for 16 SLICES. |
 | SLICE menu > **CREATE LINEAR** | Asks CLEAR TRACK? SURE?. On YES it does five things, in order: saves the track's undo as CLEAR TRACK TRIGS does; clears the active track in the current pattern with stock's CLEAR TRACK TRIGS (`0x40039df4`, mask 1: trigs, trigless trigs, every lock, the trig words); places trigs on steps 1..len; calls stock's CREATE LINEAR LOCKS writer (`0x40073544`), which puts STRT `2*((s-1) mod count)` on each trig and turns SLIC on; turns AUTO LINEAR on for the track. |
-| SLICE menu > **AUTO LINEAR:ON / :OFF** | Toggles the active track's flag. The flag lives in the Part, so SAVE PART and SAVE PROJECT keep it. While it is on, a trig the step key adds on an **empty** step gets STRT `2*((s-1) mod count)`, unless that step already holds a STRT lock. A message (AUTO LINEAR ON / OFF) confirms the toggle. |
+| SLICE menu > **AUTO LINEAR:ON / :OFF** | Toggles the active track's flag. The flag lives in the Part, so SAVE PART and SAVE PROJECT keep it (with Octakit the Part is her Kit, and SAVE KIT keeps it: below). While it is on, a trig the step key adds on an **empty** step gets STRT `2*((s-1) mod count)`, unless that step already holds a STRT lock. A message (AUTO LINEAR ON / OFF) confirms the toggle. |
 
 Both SLICE menus carry the two new rows, just before CHANGE VIEW. The menu with no slice selected has 8 rows, the one with a slice selected 11.
 
@@ -55,7 +55,9 @@ clear one track for another's sample.
 - T1 FLEX on slot 1: a 2 s sine with five slices in `markers.work`;
 - A01 LEN 12, NORMAL mode;
 - T1 trigs on 1 and 3, a STRT lock 0x20 on the empty step 7, a trigless
-  trig with a lock on 20.
+  trig with a lock on 20;
+- T1's SLIC off and the flag 0 in every part (SLIC off since 10 Oct 2026,
+  so that CREATE LINEAR's SLIC write is seen).
 
 Every action below was driven with the panel's own keys: AED, the SLICE
 page, YES, DOWN, YES. Results are RAM dumps of the bank's records and
@@ -88,7 +90,8 @@ their SRAM twins.
 - **Save and reboot**: CREATE LINEAR, then PROJ > SAVE PROJECT. The flag
   is 1 at T1's byte of part 1 in `bank01.work` and `bank01.strd` on the
   card. A second boot from that card loads the flag, SLIC, the trigs and
-  the locks as saved.
+  the locks as saved. (Remix `slice-tools`, no Octakit; with Octakit see
+  below.)
 - **The flag byte** was write-watched on its own boot, bank and SRAM.
   T1 went FLEX → THRU through SELECT MACHINE TYPE, then the AED key and the
   slot list's YES were pressed on the THRU track, then T1 went back to
@@ -99,6 +102,61 @@ their SRAM twins.
 - Before the module's first write, stock writes the byte only at boot and
   at load: the part init `0x400056b4`, the file parser `0x400165dc`, and a
   long store at `0x400208b4` over the SRAM twin.
+
+## With Octakit (10 Oct 2026)
+
+This branch carries no Octakit module (main has none); the rig lineage does
+(`modules/octakit`, [emuyia/ems-octakit](https://github.com/emuyia/ems-octakit)),
+and the unit is written for both: without her runtime her symbols link as 0
+and `flag_set` is the stock write alone (measured here: `verify_slicetools
+slice-tools`, the reboot keeps the flag and SLIC).
+
+With Octakit in the image a Part is a Kit in her
+own store, and the working part is her workspace Kit. Measured under the
+port on `bottleservice-pf` (RIGPF12B, the rig lineage: branch
+`rig-slice-qrec`; this branch has no remix with both), PROJECT 2025
+fixture, write and PC watches on her runtime:
+
+- **A reboot stages her SAVED Kit over the part** (`gk_workspace_prepare` →
+  `gk_stage_canonical`, the copy `gk_copy_payload_long_loop`). PROJ > SAVE
+  PROJECT writes `kits3a`/`kits3b` from her saved Kits; only SAVE KIT
+  (`gk_descriptor_begin_promotion`, then `gk_persistence_v3_mark_kit_dirty`)
+  copies the working part into them. So any Kit edit not saved with SAVE
+  KIT is gone after a reboot: CREATE LINEAR then SAVE PROJECT, rebooted,
+  read the flag 0 **and stock's SLIC 0** (SLIC is written by stock's
+  linear-lock writer, which Octakit wraps with her own prepare/finish). The
+  bank files held 1 for both; she does not read them for the part.
+- **With SAVE KIT the flag lasts the reboot.** CREATE LINEAR, SAVE KIT
+  (FUNC+PART, YES, YES), SAVE PROJECT, reboot: flag 1, SLIC 1, trigs and
+  locks as saved; her saved Kit holds both.
+- **The write goes through her editing functions.** `flag_set` opens her
+  workspace the way her wrapper of stock's linear-lock writer does
+  (`gk_slice_lock_prepare` / `_finish` in her `slice_lock_operations.S`):
+  `gk_stock_current_context_validate`, `gk_workspace_prepare` (bank,
+  pattern, current Kit, flags 0; refused unless it returns the workspace
+  already open and the current part), `gk_physical_acquire`, then
+  `gk_descriptor_store_byte` for the flag (it also writes a pending copy
+  when she has one), stock's own SRAM twin store and part/bank dirty marks,
+  `gk_workspace_mark_dirty_pending`, `gk_workspace_commit_update`,
+  `gk_descriptor_release`. Her symbols are `.weak` in the unit: without her
+  runtime they are 0 and the stock write runs alone, as before. If she
+  refuses, what she opened is closed as her wrapper closes it
+  (`gk_descriptor_release`, `gk_workspace_abort_update`) and the stock
+  write runs.
+- **What that changes, measured:** after AUTO LINEAR alone her workspace
+  is dirty (`__gk_workspace_dirty` 1), as after a wrapped stock edit; the
+  module before this change left it 0 (the same gate on RIGPF11B fails
+  there). Her saved Kit still reads 0 until SAVE KIT.
+- **Kit operations with the flag**, no halt in any: AUTO LINEAR alone then
+  SAVE KIT, and on a named Kit the quick save (FUNC+PART held, YES): her
+  saved Kit reads 1. Saved as 1, toggled to 0, FUNC+CUE: 1. Saved as 1,
+  LOAD KIT 2 (its own 0), LOAD KIT 1: 1. Set and not saved, LOAD KIT 2,
+  LOAD KIT > UNDO KIT: 1, still dirty. Part and SRAM twin agree in every
+  case.
+- **Inferred, not measured:** what her dirty state changes for a user. Both
+  SAVE KIT paths above saved the flag with a clean workspace as well. Her
+  `gk_part_edit_quick_save` (`part_edit.S`) skips the save of a clean
+  workspace; no gesture driven here reached it.
 
 ## Not measured
 

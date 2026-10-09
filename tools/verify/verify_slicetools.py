@@ -41,9 +41,22 @@ YES), the results are RAM dumps (the bank's records and their SRAM twins).
   thru      AUTO LINEAR on, then T1 to THRU and back to FLEX through SELECT
             MACHINE TYPE, the audio editor opened while THRU: every write to
             the flag byte (bank and SRAM) is logged; the flag must still be 1
-  saveproj  CREATE LINEAR, then PROJ > SAVE PROJECT; the card is written out
+  saveproj  CREATE LINEAR, then (with OCTAKIT) SAVE KIT, then PROJ > SAVE
+            PROJECT; the card is written out
   reboot    a second boot from that card: the flag, the trigs and the locks
             are as saved, and the bank files on the card carry the flag
+
+With OCTAKIT in the remix the part is her workspace Kit (her saved Kits and
+workspace state are dumped by her runtime's own symbols):
+  saveproj0 / reboot0  the same without SAVE KIT: a reboot stages the saved
+            Kit over the part, so the flag reverts together with stock's SLIC
+  kitdirty  AUTO LINEAR alone marks her workspace dirty (as her wrapper of
+            stock's linear-lock writer does); her saved Kit not yet changed
+  kitsave   AUTO LINEAR alone, SAVE KIT (FUNC+PART, YES, YES): the saved Kit has it
+  kitquick  a named Kit, AUTO LINEAR, the quick save (FUNC+PART held, YES)
+  kitreload saved as 1, toggled to 0, FUNC+CUE: 1 again
+  kitload   saved as 1, LOAD KIT 2 (0), LOAD KIT 1: 1
+  kitundo   set and not saved, LOAD KIT 2, LOAD KIT > UNDO KIT: 1, still dirty
 
 What it cannot see: the screen beyond the label buffer (an LCD plane is
 written per scenario for a person to look at: tools/emu/lcd_view.py), a
@@ -75,7 +88,7 @@ FLEX_REC = 0x100b14f0
 CUR = 0x100b14cc                       # track, ?, ?, part, pattern
 FLAG_OFF, SLIC_OFF = 0x2cc, 0x1e0 + 1  # T1: THRU slot byte; FLEX setup slot 1 (SLIC)
 K = dict(no=0x32, yes=0x31, up=0x33, down=0x20, left=0x34, right=0x21, aed=0x1e, func=0x2d,
-         amp=0x23, page=0x1b, rec=0x29, midi=0x35, proj=0x1c, t1=0x10, t2=0x11)
+         amp=0x23, page=0x1b, rec=0x29, midi=0x35, proj=0x1c, part=0x1d, cue=0x2a, t1=0x10, t2=0x11)
 
 
 class Script:
@@ -179,6 +192,7 @@ def build_fixture(src, dest):
             data[base + otp.MTYPE_OFF] = 1                   # T1 FLEX
             data[base + 9 + 0x2ca + 1] = 0                   # T1's FLEX slot: 1
             data[base + 9 + FLAG_OFF] = 0                    # T1's THRU slot byte: AUTO LINEAR off
+            data[base + 9 + SLIC_OFF] = 0                    # T1's SLIC off: CREATE LINEAR turns it on
         t = otp.trac_off(0, 0)
         data[t:t + 0x40] = bytes(0x40)                       # T1, A01: no trigs of any kind
         for s in range(64):
@@ -203,6 +217,7 @@ def main():
     remix = registry.remix(a.remix)
     if "SLICE TOOLS" not in remix.modules:
         print(f"  [ -- ] verify_slicetools: {a.remix} carries no SLICE TOOLS"); return 0
+    octakit = "OCTAKIT" in remix.modules
     project = a.project
     if not project and pathlib.Path("~/.octabam_project").expanduser().is_file():
         project = pathlib.Path("~/.octabam_project").expanduser().read_text().strip()
@@ -258,8 +273,22 @@ def main():
         "sparts": (SRAM_PART, NPARTS * PART_LEN), "rec": (FLEX_REC, 0x448), "label": (auto_label, 16),
     }
 
+    # Octakit: her saved Kits and her workspace's dirty byte (her runtime's
+    # own symbols), dumped by the scenarios that save or edit a Kit
+    kit_tags = {"kitdirty", "kitsave", "kitquick", "kitreload", "kitload", "kitundo",
+                "saveproj", "reboot", "saveproj0", "reboot0"}
+    if octakit:
+        _gk = {l.split()[2]: int(l.split()[0], 16) for l in subprocess.run(
+            ["m68k-elf-nm", str(ROOT / "out/runtime/octakit/runtime.elf")], capture_output=True,
+            text=True).stdout.splitlines() if len(l.split()) == 3}
+        kit_dumps = {"kits": (_gk["__gk_canonical_payloads"], 256 * PART_LEN),
+                     "okdirty": (_gk["__gk_workspace_dirty"], 1), "okkit": (_gk["__gk_current_kit"], 1)}
+    else:
+        kit_dumps = {}
+
     def dumpspec(tag):
-        return ";".join(f"{ad:#x},{n}={OUT / f'{tag}_{k}.bin'}" for k, (ad, n) in dumps_of.items())
+        dumps = dict(dumps_of, **(kit_dumps if tag in kit_tags else {}))
+        return ";".join(f"{ad:#x},{n}={OUT / f'{tag}_{k}.bin'}" for k, (ad, n) in dumps.items())
 
     scen = []
 
@@ -323,10 +352,49 @@ def main():
     if not only or "thru" in only:
         sp = OUT / "thru.script"; sp.write_text(s.text())
         solo.append(("thru", card, ["--live-script", sp, "--lcd", OUT / "thru.lcd", "--watch-mem", watch]))
-    s = Script(); start(s); slice_menu(s); s.taps("down", 8); s.tap("yes", 1200); s.tap("yes", 3000)
-    s.tap("no", 800); s.tap("no", 800)
-    s.tap("proj", 1000); s.tap("right", 700); s.tap("down", 500); s.tap("yes", 1100); s.tap("yes", 30000)
+    def savekit(s):
+        """Octakit's SAVE KIT: FUNC+PART, YES on the current slot, YES (an unnamed Kit's name editor)"""
+        s.down("func", 100); s.tap("part", 200); s.up("func", 1500); s.tap("yes", 1500); s.tap("yes", 3000)
+
+    def quicksave(s):
+        """Octakit's quick save of a named Kit: FUNC+PART held, YES"""
+        s.down("func", 100); s.down("part", 300); s.tap("yes", 400); s.up("part", 100); s.up("func", 2500)
+
+    def saveproj(s):
+        s.tap("proj", 1000); s.tap("right", 700); s.tap("down", 500); s.tap("yes", 1100); s.tap("yes", 30000)
+
+    def linear(s):
+        slice_menu(s); s.taps("down", 8); s.tap("yes", 1200); s.tap("yes", 3000); s.tap("no", 800); s.tap("no", 800)
+
+    # with Octakit the part is her workspace Kit: a reboot stages the SAVED
+    # Kit over it, so an edit lasts a reboot once SAVE KIT has saved it
+    # (stock's SLIC, measured, exactly as the flag); saveproj0 / reboot0 are
+    # that rule without SAVE KIT
+    s = Script(); start(s); linear(s)
+    if octakit:
+        savekit(s)
+    saveproj(s)
     add("saveproj", s, extra=["--card-out", OUT / "saved.img"])
+    if octakit:
+        s = Script(); start(s); linear(s); saveproj(s)
+        add("saveproj0", s, extra=["--card-out", OUT / "saved0.img"])
+        s = Script(); start(s); auto_on(s); s.tap("no", 800); add("kitdirty", s)
+        s = Script(); start(s); auto_on(s); s.tap("no", 800); savekit(s); add("kitsave", s)
+        s = Script(); start(s); savekit(s); auto_on(s); s.tap("no", 800); quicksave(s); add("kitquick", s)
+
+        def loadkit(s, moves):
+            """PART (LOAD KIT; the cursor on the current Kit's row, row 0 is UNDO KIT), UP/DOWN, YES"""
+            s.tap("part", 1500)
+            s.taps("down" if moves > 0 else "up", abs(moves), 500)
+            s.tap("yes", 2500)
+        # the flag saved as 1, toggled to 0, FUNC+CUE: the saved 1 back
+        s = Script(); start(s); auto_on(s); s.tap("no", 800); savekit(s); auto_on(s); s.tap("no", 800)
+        s.down("func", 100); s.tap("cue", 200); s.up("func", 2500); add("kitreload", s)
+        # saved as 1; Kit 2 loaded (its own 0), then Kit 1 again: 1
+        s = Script(); start(s); auto_on(s); s.tap("no", 800); savekit(s); loadkit(s, 1); loadkit(s, -1)
+        add("kitload", s)
+        # set, NOT saved; Kit 2 loaded, then LOAD KIT > UNDO KIT: Kit 1 with the unsaved 1, still dirty
+        s = Script(); start(s); auto_on(s); s.tap("no", 800); loadkit(s, 1); loadkit(s, -2); add("kitundo", s)
 
     if scen:
         cmd = [EMU, "--image", image, "--card", card, "--set", "OCTABAM", "--project", NAME,
@@ -339,9 +407,10 @@ def main():
             r = subprocess.run(list(map(str, cmd)), cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
         if r.returncode:
             sys.exit(f"verify_slicetools: ot_emu exit {r.returncode} -- {log}")
-    if (not only or "reboot" in only) and (OUT / "saved.img").is_file():
-        s = Script(); s.tap("no", 600); sp = OUT / "reboot.script"; sp.write_text(s.text())
-        solo.append(("reboot", OUT / "saved.img", ["--live-script", sp]))
+    for tag, img_ in (("reboot", "saved.img"), ("reboot0", "saved0.img")):
+        if (not only or tag in only) and (OUT / img_).is_file():
+            s = Script(); s.tap("no", 600); sp = OUT / f"{tag}.script"; sp.write_text(s.text())
+            solo.append((tag, OUT / img_, ["--live-script", sp]))
 
     def solo_run(job):
         tag, card_, args = job
@@ -392,7 +461,8 @@ def main():
               f"{n} slices, track {d('base', 'cur')[0]}",
               mask(t, 0) == 0b101 and mask(t, 0x10) == 1 << 19 and strt(t, 7) == 0x20 and strt(t, 20) == 0x08
               and d("base", "ptail")[3] == PLEN and d("base", "ptail")[5] == 0 and n == NSLICES
-              and d("base", "cur")[0] == 0 and part("base")[0x22] == 1 and part("base")[FLAG_OFF] == 0)
+              and d("base", "cur")[0] == 0 and part("base")[0x22] == 1 and part("base")[FLAG_OFF] == 0
+              and part("base")[SLIC_OFF] == 0)
         check(f"base: AUTO LINEAR's label as drawn at the first open: {d('base', 'label')[:15]!r}",
               d("base", "label").startswith(b"AUTO LINEAR:OFF\0"))
 
@@ -486,9 +556,48 @@ def main():
                   f"{data[off] if len(data) > off else None})", len(data) > off and data[off] == 1)
         t, pt = d("reboot", "trac"), part("reboot")
         check(f"reboot: flag {pt[FLAG_OFF]}, SLIC {pt[SLIC_OFF]}, trigs {mask(t, 0):#x}, "
-              f"STRT 1..{PLEN} {[strt(t, s) for s in range(1, PLEN + 1)]}",
+              f"STRT 1..{PLEN} {[strt(t, s) for s in range(1, PLEN + 1)]}"
+              + (" (SAVE KIT before SAVE PROJECT)" if octakit else ""),
               pt[FLAG_OFF] == 1 and pt[SLIC_OFF] == 1 and mask(t, 0) == (1 << PLEN) - 1
               and [strt(t, s) for s in range(1, PLEN + 1)] == [2 * ((s - 1) % NSLICES) for s in range(1, PLEN + 1)])
+        if octakit:
+            k = d("saveproj", "okkit")[0]
+            kt = d("saveproj", "kits")[k * PART_LEN:(k + 1) * PART_LEN]
+            check(f"saveproj: SAVE KIT put the flag and SLIC in Kit {k + 1}'s saved data "
+                  f"(flag {kt[FLAG_OFF]}, SLIC {kt[SLIC_OFF]})", kt[FLAG_OFF] == 1 and kt[SLIC_OFF] == 1)
+
+    if octakit and have("reboot0") and have("saveproj0") and ran("saveproj0") and ran("reboot0"):
+        pt0, pt1 = part("saveproj0"), part("reboot0")
+        check(f"reboot0: no SAVE KIT: the flag reverts with stock's SLIC, as every Kit edit does "
+              f"(before the reboot flag {pt0[FLAG_OFF]} SLIC {pt0[SLIC_OFF]}, after flag {pt1[FLAG_OFF]} "
+              f"SLIC {pt1[SLIC_OFF]})",
+              (pt0[FLAG_OFF], pt0[SLIC_OFF]) == (1, 1) and (pt1[FLAG_OFF], pt1[SLIC_OFF]) == (0, 0))
+
+    if octakit:
+        def kitflag(tag):
+            k = d(tag, "okkit")[0]
+            return k, d(tag, "kits")[k * PART_LEN + FLAG_OFF]
+        if have("kitdirty") and ran("kitdirty"):
+            k, kf = kitflag("kitdirty")
+            check(f"kitdirty: AUTO LINEAR alone marks Octakit's workspace dirty as a stock edit does "
+                  f"(dirty {d('kitdirty', 'okdirty')[0]}); her saved Kit {k + 1} still reads {kf}; "
+                  f"part and SRAM twin {part('kitdirty')[FLAG_OFF]}/{part('kitdirty', True)[FLAG_OFF]}",
+                  d("kitdirty", "okdirty")[0] == 1 and kf == 0
+                  and part("kitdirty")[FLAG_OFF] == 1 and part("kitdirty", True)[FLAG_OFF] == 1)
+        for tag, k_, f_, dirty, how in (
+                ("kitreload", 0, 1, 0, "saved as 1, toggled to 0, FUNC+CUE (reload)"),
+                ("kitload", 0, 1, 0, "saved as 1, LOAD KIT 2, LOAD KIT 1"),
+                ("kitundo", 0, 1, 1, "set and not saved, LOAD KIT 2, LOAD KIT > UNDO KIT")):
+            if have(tag) and ran(tag):
+                kk, wf = d(tag, "okkit")[0], part(tag)[FLAG_OFF]
+                check(f"{tag}: {how}: Kit {kk + 1}, the part's flag {wf}, SRAM twin {part(tag, True)[FLAG_OFF]}, "
+                      f"workspace dirty {d(tag, 'okdirty')[0]}",
+                      kk == k_ and wf == f_ and part(tag, True)[FLAG_OFF] == f_ and d(tag, "okdirty")[0] == dirty)
+        for tag, how in (("kitsave", "SAVE KIT"), ("kitquick", "the quick save of a named Kit")):
+            if have(tag) and ran(tag):
+                k, kf = kitflag(tag)
+                check(f"{tag}: AUTO LINEAR alone, then {how}: Kit {k + 1}'s saved flag {kf}, "
+                      f"workspace dirty {d(tag, 'okdirty')[0]}", kf == 1 and d(tag, "okdirty")[0] == 0)
 
     print(f"verify_slicetools: {'ok' if not fails else 'FAILED'} ({fails} failure(s)) -- {OUT}")
     return 1 if fails else 0

@@ -95,15 +95,50 @@ flag_get:
 
 | flag_set(d0 = 0/1): the bank's part and its SRAM twin, then the part dirty
 | as stock marks a part edit (0x40073682..0x400736cc).
+|
+| With Octakit in the image the working part is her workspace Kit, and the
+| write goes through her editing functions as her own wrapper around stock's
+| linear-lock writer does it (gk_slice_lock_prepare / _finish,
+| slice_lock_operations.S): context, gk_workspace_prepare, gk_physical_acquire,
+| gk_descriptor_store_byte, the stock marks, gk_workspace_mark_dirty_pending,
+| gk_workspace_commit_update, gk_descriptor_release. Her symbols are weak
+| here: without her runtime they resolve to 0 and the stock write runs alone.
+| If any of her calls refuses, what she has opened is closed as her wrapper
+| closes it, and the stock write runs (the flag still holds for the session;
+| her Kit misses it, as before).
+        .weak   gk_stock_current_context_validate, gk_workspace_prepare
+        .weak   gk_physical_acquire, gk_descriptor_store_byte
+        .weak   gk_workspace_mark_dirty_pending, gk_workspace_commit_update
+        .weak   gk_descriptor_release, gk_workspace_abort_update
+        .weak   __gk_workspace_descriptor, __gk_current_kit
 flag_set:
-        lea     -8(%sp),%sp
-        movem.l %d2-%d3,(%sp)
+        lea     -12(%sp),%sp
+        movem.l %d2-%d3/%a2,(%sp)
         move.l  %d0,%d2
+        bsr     ok_begin                | d0 = her descriptor, or < 0: stock only
+        movea.l %d0,%a2                 | a2 = descriptor (kept across the stock marks)
         bsr     part_off                | d0 = P * 0x18b2, a0 = part, d1 = t
         mulu.w  #5,%d1
-        adda.l  #0x2cc,%a0
+        move.l  %a2,%d3
+        bmi     1f
+        move.l  %d0,-(%sp)
+        move.l  %d1,-(%sp)
+        move.l  %a2,%d0                 | gk_descriptor_store_byte(d0 desc, d1 offset, d2 value)
+        addi.l  #0x2cc,%d1
+        jsr     gk_descriptor_store_byte
+        move.l  %d0,%d3
+        move.l  (%sp)+,%d1
+        move.l  (%sp)+,%d0
+        tst.l   %d3
+        beq     2f
+        bsr     ok_close                | refused: close, then the stock store
+        suba.l  %a2,%a2
+        subq.l  #1,%a2
+1:      movea.l BANKP,%a0               | (part_off's a0, reloaded: ok_close clobbers it)
+        adda.l  %d0,%a0
+        adda.l  #0x8ed80+0x2cc,%a0
         move.b  %d2,(%a0,%d1.l)
-        lea     SRAM_PART+0x2cc,%a1
+2:      lea     SRAM_PART+0x2cc,%a1
         adda.l  %d0,%a1
         move.b  %d2,(%a1,%d1.l)
         moveq   #1,%d3
@@ -118,7 +153,100 @@ flag_set:
         or.l    %d3,%d0
         move.b  %d0,0x100b145e
         bsr     bank_dirty
-        movem.l (%sp),%d2-%d3
+        move.l  %a2,%d0
+        bmi     3f
+        bsr     ok_end
+3:      movem.l (%sp),%d2-%d3/%a2
+        lea     12(%sp),%sp
+        rts
+
+| ok_begin -> d0 = Octakit's workspace descriptor, opened for an edit of the
+| current part (prepared and acquired), or -1: no Octakit, or she refused.
+| Her own wrapper's checks (gk_slice_lock_prepare): the context is settled,
+| the workspace is the one already open (PRESERVE_NAME, never a new stage),
+| for the current part, and the acquired payload is the prepared one.
+| d0/d1/a0/a1 scratch; d2-d7/a2-a6 preserved (hers preserve them too).
+ok_begin:
+        move.l  #gk_workspace_prepare,%d0
+        beq     9f
+        lea     -24(%sp),%sp
+        movem.l %d2-%d6/%a3,(%sp)
+        jsr     gk_stock_current_context_validate
+        tst.l   %d0
+        bmi     8f
+        move.l  %d0,%d4                 | d4 = bank
+        move.l  %d1,%d5                 | d5 = pattern
+        mvz.b   __gk_workspace_descriptor,%d6
+        cmpi.l  #127,%d6                | GK_DESCRIPTOR_COUNT - 1: no workspace open
+        bhi     8f
+        move.l  %d4,%d0
+        move.l  %d5,%d1
+        mvz.b   __gk_current_kit,%d2
+        moveq   #0,%d3
+        jsr     gk_workspace_prepare    | (bank, pattern, kit, flags 0) -> d0 desc, d1 part, a0 payload
+        tst.l   %d0
+        bmi     8f
+        cmp.l   %d6,%d0
+        bne     7f
+        mvz.b   CUR_PART,%d2
+        cmp.l   %d2,%d1
+        bne     7f
+        movea.l %a0,%a3
+        move.l  %d4,%d0
+        move.l  %d2,%d1
+        jsr     gk_physical_acquire     | (bank, part) -> d0 desc, a0 payload, pinned
+        tst.l   %d0
+        bmi     7f
+        cmp.l   %d6,%d0
+        bne     6f
+        cmpa.l  %a3,%a0
+        bne     6f
+        move.l  %d4,ok_bank
+        move.l  %d5,ok_pattern
+        move.l  %d2,ok_part
+        move.l  %a3,ok_payload
+        move.l  %d6,%d0
+        bra     5f
+6:      move.l  %d6,%d0
+        jsr     gk_descriptor_release
+7:      jsr     gk_workspace_abort_update
+8:      moveq   #-1,%d0
+5:      movem.l (%sp),%d2-%d6/%a3
+        lea     24(%sp),%sp
+        rts
+9:      moveq   #-1,%d0
+        rts
+
+| ok_close(d0 ignored, a2 = descriptor): release and abort, as her wrapper
+| does on a refusal after the acquire. Every register but d0/d1/a0/a1 kept.
+ok_close:
+        move.l  %a2,%d0
+        jsr     gk_descriptor_release
+        jsr     gk_workspace_abort_update
+        rts
+
+| ok_end(a2 = descriptor): the edit published -- dirty pending, committed,
+| released (gk_slice_lock_finish's sequence). A refusal after the store
+| leaves the part written; it is closed the way her wrapper closes it.
+ok_end:
+        lea     -8(%sp),%sp
+        movem.l %d2-%d3,(%sp)
+        move.l  %a2,%d0
+        move.l  ok_bank,%d1
+        move.l  ok_pattern,%d2
+        move.l  ok_part,%d3
+        movea.l ok_payload,%a0
+        jsr     gk_workspace_mark_dirty_pending
+        tst.l   %d0
+        bne     1f
+        jsr     gk_workspace_commit_update
+        tst.l   %d0
+        bne     1f
+        move.l  %a2,%d0
+        jsr     gk_descriptor_release
+        bra     2f
+1:      bsr     ok_close
+2:      movem.l (%sp),%d2-%d3
         lea     8(%sp),%sp
         rts
 
@@ -375,6 +503,11 @@ auto_hook:
 | SRAM mask store.
 
         .data
+        .align  2
+ok_bank:        .long   0               | ok_begin's context, for ok_end
+ok_pattern:     .long   0
+ok_part:        .long   0
+ok_payload:     .long   0
 tlen_label:     .asciz  "TLEN SLICES"
 cl_label:       .asciz  "CREATE LINEAR"
 auto_label:     .asciz  "AUTO LINEAR:OFF"

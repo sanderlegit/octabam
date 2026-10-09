@@ -17,7 +17,9 @@ one slice per step:
                   LINEAR is switched on for the track.
   AUTO LINEAR     a SLICE menu row drawn AUTO LINEAR:ON / :OFF for the active
                   track (rewritten each time the menu opens): toggles a
-                  per-track flag kept in the Part, so it is saved with it.
+                  per-track flag kept in the Part, so it is saved with it
+                  (with Octakit the Part is her Kit: the write goes through
+                  her editing functions and SAVE KIT saves it).
                   While on, a trig the step key adds on an EMPTY step gets
                   STRT 2*((s-1) mod count) when the step has no STRT lock.
                   Only that add: not a removal, a trigless or lock trig, live
@@ -59,7 +61,8 @@ MODULE = Module(
     key="SLICE TOOLS",
     kind=Kind.CF_PATCH,
     category=Category.MACHINES, author="dries", author_url="https://github.com/sanderlegit",
-    proof=Proof.PORT, proof_note="verify_slicetools under the port, 9 Oct 2026",
+    proof=Proof.PORT, proof_note="verify_slicetools under the port, 9 Oct 2026; with Octakit "
+               "(bottleservice-pf), 10 Oct 2026",
     doc="Audio editor SLICE page: CREATE SLICE GRID > TLEN SLICES (one slice per track step), "
         "SLICE menu > CREATE LINEAR (clear the track, a trig and a slice lock per step) and "
         "AUTO LINEAR (a trig added on an empty step gets its step's slice).",
