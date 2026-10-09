@@ -1349,8 +1349,8 @@ def main():
 
     for _m, _t in [(remix_modules()[_k], _t) for _k in REMIX.modules
                    for _t in getattr(remix_modules()[_k], "tables", ())]:
-        _ents = [rd32(_t.old + i * 4) for i in range(_t.count)]
-        _ents += [_sym[u][s] for u, s in _t.symbols]
+        _ents = _t.entries([rd32(_t.old + i * 4) for i in range(_t.count)],
+                           [_sym[u][s] for u, s in _t.symbols])
         _blob = b"".join(v.to_bytes(4, "big") for v in _ents)
         _at = (_cave_top + 0x7f) & ~0x7f
         if any(img[_at - BASE:_at - BASE + len(_blob)]):

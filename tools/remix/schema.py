@@ -723,6 +723,18 @@ class TableGrow:
     count: int
     symbols: tuple[tuple[str, str], ...]
     refs: tuple[tuple[int, int], ...]
+    # Backported from main (2d4a5791): the symbols as one block before stock
+    # entry `insert_at`; None appends.
+    insert_at: int | None = None
+
+    def __post_init__(self):
+        if self.insert_at is not None and not 0 <= self.insert_at <= self.count:
+            raise ValueError(f"TableGrow({self.label!r}): insert_at {self.insert_at} is "
+                             f"outside 0..{self.count}")
+
+    def entries(self, stock: list[int], added: list[int]) -> list[int]:
+        at = self.count if self.insert_at is None else self.insert_at
+        return stock[:at] + added + stock[at:]
 
 
 @dataclass(frozen=True)
