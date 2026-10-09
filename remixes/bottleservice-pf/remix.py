@@ -19,7 +19,7 @@ REMIX = Remix(
              "OCTAKIT", "SCENES KITS",
              "SCENES P2", "SCENES P2 KITS",
              "FLEX SEEK BIND", "FLEX SEEK BIND CTR", "RECORDER SPACING", "RLEN PLEN", "QREC TLEN", "SLICE TOOLS",
-             "RETURNS", "POST FADER", "MODE DEFAULTS", "HOST LOCK"),
+             "RETURNS", "POST FADER", "MODE DEFAULTS", "HOST LOCK", "ROLE PASTE"),
     fallback="SEND",
     hidden=("REVERB SERVER", "DELAY SERVER"),
     host_slots=(("DELAY SERVER", 2), ("REVERB SERVER", 2)),

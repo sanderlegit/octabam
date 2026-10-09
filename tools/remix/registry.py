@@ -283,6 +283,10 @@ def remix(name: str | None):
                 f"remix {r.name!r}: {bad} sit on a chooser row with an id above 0x1c "
                 f"beside OCTAKIT, whose selection wrapper halts on it (VEC:04, "
                 f"gk_machine_selection_fatal) -- move the module to a free id <= 0x1c")
+    # verify_role_paste's control only: the remix without ROLE PASTE, to show
+    # the paste it fixes (an FX2 page paste carrying T1's BusDelay to T2).
+    if os.environ.get("OCTABAM_NO_ROLE_PASTE"):
+        r = dataclasses.replace(r, modules=tuple(k for k in r.modules if k != "ROLE PASTE"))
     # verify_burn's pair only: OCTABAM_NO_USB_IN leaves USB AUDIO IN out of
     # both of its builds, as OCTABAM_NO_OS_SWITCH leaves OS SWITCH out. Its
     # DSP inject runs once a frame at the frame head (no per-sample cycles),

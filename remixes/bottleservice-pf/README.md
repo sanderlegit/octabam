@@ -18,6 +18,10 @@
   crossfader on a track's LEVEL moves its sends too.
 - [HOST LOCK](../../modules/host-lock/README.md): the FX2 chooser changes
   nothing on T1 and T5, so their bus servers stay.
+- [ROLE PASTE](../../modules/role-paste/README.md): an FX2 page paste or a
+  track paste keeps the destination's role (T1 BusDelay, T5 BusVerb, T8
+  RETURNS, else SEND); only DEL/REV cross. Before it, T1's page pasted on
+  T2 gave T2 the hidden BusDelay, a dry pass (RIGPF11B, 9 Oct 2026).
 
 The variants it grew from (`bottleservice-rec`, `-rec-plen`, `-ret`) and
 `-pf-flag` were removed on 9 Oct 2026; they are in history.
